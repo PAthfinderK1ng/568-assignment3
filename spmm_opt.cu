@@ -41,7 +41,7 @@ __global__ void spmm_csr_warp_kernel(
 {
     int global_tid = blockIdx.x * blockDim.x + threadIdx.x;
     int warp = global_tid / 32;
-    int lane = threadIdx.x % 32;
+    int lane = global_tid & 31;;
 
     if (warp >= M) return;
     int row = warp;
