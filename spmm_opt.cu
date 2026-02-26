@@ -98,7 +98,7 @@ int main() {
     cudaMemcpy(d_vals, vals.data(), nnz*sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B.data(), (size_t)K*N*sizeof(float), cudaMemcpyHostToDevice);
 
-    int block = 256; // 每个 Block 有 256 个线程 (即 8 个 Warps)
+    int block = 256; 
     long long total_threads_needed = (long long)M * 32;
     int grid = (total_threads_needed + block - 1) / block;
     std::cout << "Launching Kernel with Grid=" << grid << ", Block=" << block << "\n";
@@ -111,7 +111,42 @@ int main() {
         d_B,
         d_C
     );
+    cudaDeviceSynchronize();
 
+// Timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    const int iters = 100;  // average over many runs for stability
+    cudaEventRecord(start);
+
+    for (int it = 0; it < iters; ++it) {
+        spmm_csr_warp_kernel<<<grid, block>>>(
+            M, N,
+            d_row_ptr,
+            d_col_idx,
+            d_vals,
+            d_B,
+            d_C
+    );
+    }
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, start, stop);
+    ms /= iters;
+
+    std::cout << "Kernel time (avg over " << iters << ") = " << ms << " ms\n";
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+// (optional) check launch errors
+cudaError_t e = cudaGetLastError();
+if (e != cudaSuccess) std::cout << "Kernel launch error: " << cudaGetErrorString(e) << "\n";
     // // Copy result back
     std::vector<float> C((size_t)M * N);
     cudaMemcpy(C.data(), d_C, (size_t)M*N*sizeof(float), cudaMemcpyDeviceToHost);

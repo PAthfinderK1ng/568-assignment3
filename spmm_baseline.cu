@@ -104,6 +104,46 @@ int main(int argc, char** argv) {
     spmm_csr_row_kernel<<<grid, block>>>(M, N, d_row_ptr, d_col_idx, d_vals, d_B, d_C);
     cudaDeviceSynchronize();
 
+// Timing
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    const int iters = 100;
+
+    cudaEventRecord(start);
+
+    for (int it = 0; it < iters; ++it) {
+        spmm_csr_row_kernel<<<grid, block>>>(
+            M, N,
+            d_row_ptr,
+            d_col_idx,
+            d_vals,
+            d_B,
+            d_C
+        );
+    }   
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float ms = 0.0f;
+    cudaEventElapsedTime(&ms, start, stop);
+    ms /= iters;
+
+    std::cout << "Baseline Kernel time (avg over "
+          << iters << ") = " << ms << " ms\n";
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
+
+// Optional error check
+    cudaError_t e = cudaGetLastError();
+    if (e != cudaSuccess)
+        std::cout << "Kernel launch error: "
+                << cudaGetErrorString(e) << "\n";
+        cudaDeviceSynchronize();
+
     // Copy back
     std::vector<float> C((size_t)M*N);
     cudaMemcpy(C.data(), d_C, (size_t)M*N*sizeof(float), cudaMemcpyDeviceToHost);
